@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/png" href="https://www.sonyliv.com/assets/favicon.png">
+    <title>Sony Liv Media Metadata Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <style>
+        .response-success-msg,
+        .response-error-msg {
+            font-size: 14px;
+        }
+
+        #json-container {
+            background-color: rgba(241, 243, 243, 0.409);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">Media Metadata</div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Company Name:</label>
+                            <input type="text" class="form-control" id="name" name="name" />
+                        </div>
+                        <div class="col-12 mb-2">
+                            <label for="name" class="form-label">Metadata URL:</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control metadata_url"
+                                    value="https://run.mocky.io/v3/85f33053-b7d2-4d49-8e94-694f8d335a4f"
+                                    id="metadata_url" />
+                                <button onclick="preview()" class="input-group-text btn btn-primary btn-preview">
+                                    Preview
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-12 mb-3">
+                            <span class="response-success-msg text-success"></span>
+                            <span class="response-error-msg text-danger"></span>
+                        </div>
+                        <div class="d-grid">
+                            <button onclick="saveMetaData()" class="btn btn-primary save-btn">Submit</button>
+                        </div>
+                        <hr />
+                        <div class="roles-btn"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- preview modal start -->
+    <div class="modal fade" id="previewModal" tabindex="-1" role="dialog" aria-labelledby="previewModalLabel">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="previewModalLabel">
+                        Preview JSON Data
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="json-container"></div>
+            </div>
+        </div>
+    </div>
+    <!-- preview modal end -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/2.11.6/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@textea/json-viewer@3"></script>
+    <script>
+        function validateUrl(file_url) {
+            const url_regex = /^(ftp|http|https):\/\/[^ "]+$/;
+            if (file_url == "") {
+                $(".response-error-msg").html("Please Enter Metadata URL");
+                return false
+            } else if (!url_regex.test(file_url)) {
+                $(".response-error-msg").html("Please Enter Valid Metadata URL");
+                return false
+            } else {
+                return true;
+            }
+        }
+        async function preview() {
+            let metadata_url = $(".metadata_url").val();
+            let isvalid = validateUrl(metadata_url)
+            if (isvalid) {
+                $(".btn-preview").html("Fetching...");
+                try {
+                    const response = await fetch(metadata_url);
+                    if (!response.ok) {
+                        $(".btn-preview").html("Preview");
+                        $(".response-error-msg").html("Not able to fetch url.");
+                        throw new Error("Not able to fetch url");
+                    }
+                    const contentType = response.headers.get("content-type");
+                    if (contentType && contentType.includes("application/json")) {
+                        const jsonData = await response.json();
+                        $(".btn-preview").html("Preview");
+                        $('#previewModalLabel').html('Preview JSON Data')
+                        displayJsonData(jsonData);
+                    } else {
+                        $(".btn-preview").html("Preview");
+                        $(".response-error-msg").html(
+                            "Metadata url does not contains json data"
+                        );
+                    }
+                } catch (error) {
+                    $(".btn-preview").html("Preview");
+                    $(".response-error-msg").html("Not able to fetch url.");
+                    console.error("Error:", error);
+                }
+            }
+        }
+        function displayJsonData(jsonData) {
+            const jsonDataModal = document.getElementById("json-container");
+            jsonDataModal.innerHTML = "";
+            const preElement = document.createElement("pre");
+            const codeElement = document.createElement("code");
+            codeElement.textContent = JSON.stringify(jsonData, null, 2);
+            preElement.appendChild(codeElement);
+            jsonDataModal.appendChild(preElement);
+            $("#previewModal").modal("show");
+        }
+        let api_host = 'http://127.0.0.1:3000'
+        function saveMetaData() {
+            let metadata_Url = $(".metadata_url").val();
+            let isvalidUrl = validateUrl(metadata_Url)
+            if (isvalidUrl) {
+                $.ajax({
+                    url: api_host + "/save-media-metadata",
+                    method: 'POST',
+                    data: JSON.stringify({ metadata_url: metadata_Url }),
+                    contentType: 'application/json',
+                    beforeSend: function () {
+                        $('.save-btn').html("Processing...")
+                        $('.save-btn').attr("disabled", true);
+                    },
+                    success: function (response) {
+                        if (response.status) {
+                            $('.save-btn').html("Submit")
+                            $(".response-success-msg").html(response.message);
+                            $('.save-btn').attr("disabled", false);
+                        } else {
+                            $('.save-btn').html("Submit")
+                            $('.save-btn').attr("disabled", false);
+                            $(".response-error-msg").html(response.message);
+                        }
+                    },
+                    error: function (xhr, status, error) {
+                        console.error(xhr.responseText);
+                        $('.save-btn').html("Submit")
+                        $('.save-btn').attr("disabled", false);
+                        $(".response-error-msg").html("Could not able to save media metadata.");
+                    }
+                });
+            }
+        }
+        document.addEventListener("DOMContentLoaded", function () {
+            $.ajax({
+                url: api_host + "/get-user-roles",
+                method: "GET",
+                success: function (response) {
+                    if (response.status) {
+                        let roles_btn = ``
+                        response.data.forEach(function (movie) {
+                            roles_btn += `<button type="button" onclick="getMediaByRoles('${movie}')" class="btn btn-outline-primary ${movie}-btn">View As ${movie}</button> `
+                        });
+                        $('.roles-btn').html(roles_btn)
+                    }
+                },
+                error: function (xhr, status, error) {
+                    console.error("Error:", error);
+                }
+            });
+        });
+        function getMediaByRoles(role) {
+            $.ajax({
+                url: api_host + "/get-media-metadata",
+                method: 'POST',
+                data: JSON.stringify({ role: role }),
+                contentType: 'application/json',
+                beforeSend: function () {
+                    $('.'+role+'-btn').html("Fetching...")
+                    $('.'+role+'-btn').attr("disabled", true);
+                },
+                success: function (response) {
+                    if (response.status) {
+                        $('.'+role+'-btn').html("View As "+role)
+                        $('.'+role+'-btn').attr("disabled", false);
+                        $('#previewModalLabel').html('View Media Metadata as '+role)
+                        displayJsonData(response.data)
+                    } else {
+                        $('.'+role+'-btn').html("View As "+role)
+                        $('.'+role+'-btn').attr("disabled", false);
+                        $(".response-error-msg").html(response.message);
+                    }
+                },
+                error: function (xhr, status, error) {
+                    console.error(xhr.responseText);
+                    $('.save-btn').html("Submit")
+                    $('.save-btn').attr("disabled", false);
+                    $(".response-error-msg").html("Could not able to save media metadata.");
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>
